@@ -178,6 +178,68 @@ def get_run_stats():
     return [dict(r) for r in rows]
 
 
+def get_station_trends():
+    """Para cada estación: media últimas 3 sesiones vs media anteriores."""
+    conn = get_db()
+    rows = conn.execute("""
+        SELECT sg.label, sg.duration_s, s.date
+        FROM segments sg
+        JOIN sessions s ON s.id = sg.session_id
+        WHERE sg.type = 'station'
+        ORDER BY sg.label, s.date ASC
+    """).fetchall()
+    conn.close()
+
+    from collections import defaultdict
+    by_station = defaultdict(list)
+    for r in rows:
+        by_station[r['label']].append(r['duration_s'])
+
+    result = []
+    for label, times in by_station.items():
+        if len(times) < 2:
+            result.append({'label': label, 'trend': 0, 'pct': 0, 'recent_avg': times[-1], 'prev_avg': times[-1]})
+            continue
+        recent = times[-min(3, len(times)):]
+        prev = times[:-min(3, len(times))] or times[:1]
+        recent_avg = sum(recent) / len(recent)
+        prev_avg = sum(prev) / len(prev)
+        pct = round((recent_avg - prev_avg) / prev_avg * 100, 1)
+        result.append({'label': label, 'trend': -1 if pct < 0 else 1 if pct > 0 else 0,
+                       'pct': abs(pct), 'recent_avg': round(recent_avg), 'prev_avg': round(prev_avg)})
+    return result
+
+
+def get_session_heatmap(session_id):
+    """Segmentos con color relativo a la media personal."""
+    conn = get_db()
+    segs = conn.execute(
+        "SELECT * FROM segments WHERE session_id = ? ORDER BY position", (session_id,)
+    ).fetchall()
+
+    # get personal avg per label
+    avgs = conn.execute("""
+        SELECT sg.label, AVG(sg.duration_s) as avg_s
+        FROM segments sg
+        JOIN sessions s ON s.id = sg.session_id
+        WHERE sg.type = 'station'
+        GROUP BY sg.label
+    """).fetchall()
+    conn.close()
+
+    avg_map = {r['label']: r['avg_s'] for r in avgs}
+    result = []
+    for sg in segs:
+        sg = dict(sg)
+        if sg['type'] == 'station' and sg['label'] in avg_map:
+            avg = avg_map[sg['label']]
+            sg['pct_vs_avg'] = round((sg['duration_s'] - avg) / avg * 100, 1)
+        else:
+            sg['pct_vs_avg'] = None
+        result.append(sg)
+    return result
+
+
 def get_run_history(distance_m):
     conn = get_db()
     rows = conn.execute("""

@@ -154,6 +154,16 @@ def station_history(label: str):
     return db.get_station_history(label)
 
 
+@app.get("/api/stats/trends")
+def station_trends():
+    return db.get_station_trends()
+
+
+@app.get("/api/sessions/{session_id}/heatmap")
+def session_heatmap(session_id: int):
+    return db.get_session_heatmap(session_id)
+
+
 @app.get("/api/stats/runs")
 def run_stats():
     return db.get_run_stats()
