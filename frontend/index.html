@@ -612,43 +612,47 @@ async function renderRaceEstimate() {
   const missing = data.missing_stations;
   const complete = missing.length === 0 && data.est_1km_s;
 
+  function estimateBlock(time, label, isRun, isBest) {
+    const bg = !time ? '#2a2a2a' : isRun ? 'rgba(59,130,246,.25)' : 'rgba(249,115,22,.25)';
+    const border = isBest ? '2px solid var(--good)' : '2px solid transparent';
+    return `
+      <div style="flex:1;min-width:56px;max-width:90px;">
+        <div style="background:${bg};border:${border};border-radius:6px;padding:7px 4px;text-align:center;margin-bottom:4px;">
+          <div style="font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;">${time ? fmt(time) : '—'}</div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);text-align:center;line-height:1.2;">${label}</div>
+      </div>`;
+  }
+
+  const avgBlocks = data.segments.flatMap((seg, i) => [
+    estimateBlock(seg.run_avg_s, `Carrera ${i+1}`, true, false),
+    estimateBlock(seg.station_avg_s ? Math.round(seg.station_avg_s) : null, seg.station_label, false, false),
+  ]).join('');
+
+  const bestBlocks = data.segments.flatMap((seg, i) => [
+    estimateBlock(seg.run_best_s, `Carrera ${i+1}`, true, true),
+    estimateBlock(seg.station_best_s, seg.station_label, false, true),
+  ]).join('');
+
   el.innerHTML = `
     <div class="grid-2" style="gap:16px;margin-bottom:20px;">
-      <div style="padding:16px;background:var(--bg);border-radius:10px;text-align:center;">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">ESTIMADO (TIEMPOS MEDIOS)</div>
-        <div style="font-size:36px;font-weight:800;color:var(--accent)">${data.total_avg_s ? fmt(data.total_avg_s) : '—'}</div>
-        ${!complete ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">faltan datos: ${missing.join(', ')}</div>` : ''}
+      <div style="padding:12px 16px;background:var(--bg);border-radius:10px;text-align:center;">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">TIEMPOS MEDIOS</div>
+        <div style="font-size:32px;font-weight:800;color:var(--accent)">${fmt(data.total_avg_s)}</div>
+        ${missing.length ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">sin datos: ${missing.join(', ')}</div>` : ''}
       </div>
-      <div style="padding:16px;background:var(--bg);border-radius:10px;text-align:center;">
-        <div style="font-size:12px;color:var(--good);margin-bottom:6px;">ESTIMADO (MEJORES TIEMPOS)</div>
-        <div style="font-size:36px;font-weight:800;color:var(--good)">${data.total_best_s ? fmt(data.total_best_s) : '—'}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">si replicas tus mejores marcas</div>
+      <div style="padding:12px 16px;background:var(--bg);border-radius:10px;text-align:center;">
+        <div style="font-size:11px;color:var(--good);margin-bottom:4px;">MEJORES TIEMPOS</div>
+        <div style="font-size:32px;font-weight:800;color:var(--good)">${fmt(data.total_best_s)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">si replicas tus mejores marcas</div>
       </div>
     </div>
-    <table>
-      <thead><tr>
-        <th>Segmento</th><th>Medio</th><th>Mejor</th>
-      </tr></thead>
-      <tbody>
-        ${data.segments.map((seg, i) => `
-          <tr>
-            <td style="color:var(--run)">🏃 ${seg.run_label}</td>
-            <td style="font-variant-numeric:tabular-nums">${seg.run_avg_s ? fmt(seg.run_avg_s) : '—'}</td>
-            <td style="font-variant-numeric:tabular-nums;color:var(--good)">${seg.run_best_s ? fmt(seg.run_best_s) : '—'}</td>
-          </tr>
-          <tr>
-            <td style="color:var(--accent)">💪 ${seg.station_label}</td>
-            <td style="font-variant-numeric:tabular-nums">${seg.station_avg_s ? fmt(Math.round(seg.station_avg_s)) : '<span style="color:var(--muted)">sin datos</span>'}</td>
-            <td style="font-variant-numeric:tabular-nums;color:var(--good)">${seg.station_best_s ? fmt(seg.station_best_s) : '—'}</td>
-          </tr>
-        `).join('')}
-        <tr style="border-top:2px solid var(--border);">
-          <td style="font-weight:700">TOTAL</td>
-          <td style="font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)">${fmt(data.total_avg_s)}</td>
-          <td style="font-weight:700;font-variant-numeric:tabular-nums;color:var(--good)">${fmt(data.total_best_s)}</td>
-        </tr>
-      </tbody>
-    </table>
+
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">TIEMPOS MEDIOS</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px;">${avgBlocks}</div>
+
+    <div style="font-size:11px;color:var(--good);margin-bottom:8px;">MEJORES TIEMPOS</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">${bestBlocks}</div>
   `;
 }
 

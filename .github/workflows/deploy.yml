@@ -1,0 +1,27 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest code
+        run: git -C /opt/hyrox pull origin main
+
+      - name: Install dependencies
+        run: /opt/hyrox/venv/bin/pip install -r /opt/hyrox/requirements.txt
+
+      - name: Restart service
+        run: sudo systemctl restart hyrox-dashboard
+
+      - name: Clean up runner artifacts
+        if: always()
+        run: |
+          find /opt/hyrox/actions-runner -maxdepth 1 -name 'externals.*' -type d -exec rm -rf {} + 2>/dev/null || true
+          find /opt/hyrox/actions-runner -maxdepth 1 -name 'bin.*' -type d -exec rm -rf {} + 2>/dev/null || true
+          find /opt/hyrox/actions-runner -maxdepth 1 -name '*.tar.gz' -delete 2>/dev/null || true
+          rm -rf /opt/hyrox/actions-runner/_work/* 2>/dev/null || true
+          find /opt/hyrox/actions-runner/_diag -name '*.log' -mtime +7 -delete 2>/dev/null || true
