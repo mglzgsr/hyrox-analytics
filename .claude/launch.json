@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "hyrox",
+      "runtimeExecutable": "venv/bin/uvicorn",
+      "runtimeArgs": ["main:app", "--port", "8003"],
+      "port": 8003
+    }
+  ]
+}

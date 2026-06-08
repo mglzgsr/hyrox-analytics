@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyrox Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0f0f0f;
+  --card: #1a1a1a;
+  --border: #2a2a2a;
+  --accent: #f97316;
+  --accent2: #fb923c;
+  --text: #f1f1f1;
+  --muted: #888;
+  --good: #22c55e;
+  --bad: #ef4444;
+  --run: #3b82f6;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; }
+
+/* layout */
+.header { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 24px; height: 56px; }
+.header h1 { font-size: 18px; font-weight: 700; color: var(--accent); }
+.nav-btn { background: none; border: none; color: var(--muted); font-size: 14px; padding: 8px 12px; cursor: pointer; border-radius: 6px; }
+.nav-btn.active, .nav-btn:hover { background: var(--border); color: var(--text); }
+.main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+
+/* cards */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.card-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+/* stat box */
+.stat-val { font-size: 28px; font-weight: 700; }
+.stat-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+/* buttons */
+.btn { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-ghost { background: var(--border); color: var(--text); }
+.btn-ghost:hover { background: #333; }
+.btn-danger { background: #7f1d1d; color: #fca5a5; }
+.btn-danger:hover { background: #991b1b; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* table */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.03); }
+
+/* badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 500; }
+.badge-run { background: rgba(59,130,246,.2); color: #93c5fd; }
+.badge-station { background: rgba(249,115,22,.2); color: #fdba74; }
+
+/* import wizard */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.7); z-index: 100; overflow-y: auto; }
+.modal-overlay.open { display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; }
+.modal { background: var(--card); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 720px; padding: 28px; }
+.modal h2 { font-size: 18px; margin-bottom: 20px; }
+
+/* session wizard rows */
+.session-candidate { border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.session-candidate.imported { opacity: .45; }
+.session-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.session-date { font-weight: 700; font-size: 16px; }
+.session-dur { color: var(--muted); font-size: 13px; }
+.splits-config { display: grid; gap: 6px; }
+.split-row { display: grid; grid-template-columns: 28px 90px 1fr 110px 80px 80px; gap: 8px; align-items: center; font-size: 13px; }
+.split-row .split-time { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.split-row select, .split-row input { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 8px; font-size: 12px; width: 100%; }
+.split-label { color: var(--muted); }
+
+/* progress bar */
+.bar-wrap { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* chart container */
+.chart-wrap { position: relative; height: 260px; }
+
+/* section */
+.section { margin-bottom: 28px; }
+.section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+
+/* tabs */
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.tab { padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; font-size: 14px; }
+.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+select { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+input[type=text], textarea { background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 14px; width: 100%; }
+
+.empty { text-align: center; color: var(--muted); padding: 48px 0; font-size: 15px; }
+.mt8 { margin-top: 8px; }
+.mt16 { margin-top: 16px; }
+.mt20 { margin-top: 20px; }
+.flex { display: flex; align-items: center; }
+.gap8 { gap: 8px; }
+.gap16 { gap: 16px; }
+.ml-auto { margin-left: auto; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🏃 Hyrox Analytics</h1>
+  <nav style="display:flex;gap:4px;">
+    <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+    <button class="nav-btn" onclick="showPage('sessions')">Sesiones</button>
+    <button class="nav-btn" onclick="showPage('stations')">Estaciones</button>
+  </nav>
+  <div class="ml-auto">
+    <button class="btn btn-primary btn-sm" onclick="openImport()">+ Importar</button>
+  </div>
+</div>
+
+<!-- PAGES -->
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard">
+    <div id="dash-empty" class="empty" style="display:none">
+      <p>Sin sesiones todavía.<br>Importa tu export de Apple Health para empezar.</p>
+      <button class="btn btn-primary mt16" onclick="openImport()">Importar</button>
+    </div>
+    <div id="dash-content">
+      <div class="section">
+        <div class="grid-4" id="kpi-grid"></div>
+      </div>
+      <div class="section grid-2">
+        <div class="card">
+          <div class="card-title">Tiempo total por sesión</div>
+          <div class="chart-wrap"><canvas id="chart-total"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Ranking de estaciones (tiempo medio)</div>
+          <div id="station-ranking"></div>
+        </div>
+      </div>
+      <div class="section" id="dash-estimate-section" style="display:none">
+        <div class="card">
+          <div class="card-title">Estimado carrera completa</div>
+          <div id="dash-estimate-content"></div>
+        </div>
+      </div>
+      <div class="section" id="dash-runs-section">
+        <div class="card">
+          <div class="card-title">Carreras</div>
+          <div id="dash-runs-content"></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="card">
+          <div class="card-title">Progresión por estación</div>
+          <div style="margin-bottom:12px;">
+            <select id="station-select" onchange="renderStationChart()"></select>
+          </div>
+          <div class="chart-wrap"><canvas id="chart-station"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SESSIONS -->
+  <div id="page-sessions" style="display:none">
+    <div class="flex gap16 mt8" style="margin-bottom:20px;">
+      <div class="section-title" style="margin:0">Sesiones</div>
+      <button class="btn btn-primary btn-sm ml-auto" onclick="openImport()">+ Importar</button>
+    </div>
+    <div id="sessions-list"></div>
+  </div>
+
+  <!-- STATIONS -->
+  <div id="page-stations" style="display:none">
+    <div class="section-title mt8">Estaciones</div>
+    <div id="stations-grid" class="grid-2" style="margin-top:16px;"></div>
+  </div>
+
+</div>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="modal-import">
+  <div class="modal">
+    <div class="flex gap8" style="margin-bottom:20px;">
+      <h2 style="margin:0">Importar sesiones</h2>
+      <button class="btn btn-ghost btn-sm ml-auto" onclick="closeImport()">✕ Cerrar</button>
+    </div>
+
+    <div id="import-step-upload">
+      <input type="file" id="import-file" accept=".xml,.zip" style="display:none" onchange="handleFileSelected(this)">
+      <button class="btn btn-primary" onclick="document.getElementById('import-file').click()">Seleccionar archivo export.xml</button>
+      <div id="import-large-file" style="display:none;margin-top:16px;">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">📦 Archivo grande — selecciona el archivo desde el explorador:</p>
+        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+          <div style="background:var(--bg);padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+            <button class="btn btn-ghost btn-sm" id="browse-up" onclick="browseUp()">↑</button>
+            <span id="browse-path" style="font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          </div>
+          <div id="browse-list" style="max-height:220px;overflow-y:auto;"></div>
+        </div>
+        <div id="browse-selected" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.4);border-radius:8px;display:flex;align-items:center;gap:8px;">
+          <span id="browse-selected-name" style="font-size:13px;flex:1;"></span>
+          <button class="btn btn-primary btn-sm" onclick="handlePathImport()">Procesar</button>
+        </div>
+      </div>
+      <div id="import-loading" style="display:none;color:var(--muted);margin-top:12px;font-size:14px;">Procesando...</div>
+      <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Zona de peligro</div>
+        <button class="btn btn-danger btn-sm" onclick="resetDatabase()">🗑 Borrar todos los datos</button>
+      </div>
+    </div>
+
+    <div id="import-step-sessions" style="display:none">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px;" id="import-summary"></p>
+      <div id="import-sessions-list"></div>
+      <div class="flex gap8 mt20">
+        <button class="btn btn-ghost" onclick="showImportStep('upload')">← Volver</button>
+        <button class="btn btn-primary ml-auto" onclick="saveAllSessions()">Guardar sesiones</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SESSION DETAIL MODAL -->
+<div class="modal-overlay" id="modal-session">
+  <div class="modal" style="max-width:600px;">
+    <div class="flex gap8" style="margin-bottom:20px;">
+      <h2 id="session-detail-title" style="margin:0"></h2>
+      <button class="btn btn-ghost btn-sm ml-auto" onclick="closeSessionDetail()">✕</button>
+    </div>
+    <div id="session-detail-body"></div>
+    <div id="session-edit-body" style="display:none"></div>
+    <div class="flex gap8 mt20">
+      <button class="btn btn-ghost btn-sm" id="session-edit-btn">✏️ Editar</button>
+      <button class="btn btn-primary btn-sm" id="session-save-btn" style="display:none">Guardar cambios</button>
+      <button class="btn btn-ghost btn-sm" id="session-cancel-btn" style="display:none">Cancelar</button>
+      <button class="btn btn-danger btn-sm ml-auto" id="session-delete-btn">Eliminar sesión</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATIONS = ["SkiErg","Sled Push","Sled Pull","Burpee Broad Jump","Rowing","Farmers Carry","Sandbag Lunges","Wall Balls"];
+let state = { sessions: [], stats: [], currentPage: 'dashboard' };
+let chartTotal = null, chartStation = null;
+let pendingSessions = [];
+
+// --- utils ---
+function fmt(s) {
+  const m = Math.floor(s / 60), sec = s % 60;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+function fmtDate(d) {
+  return new Date(d).toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+
+// --- nav ---
+function showPage(page) {
+  ['dashboard','sessions','stations'].forEach(p => {
+    document.getElementById('page-' + p).style.display = p === page ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-btn').forEach((b,i) => {
+    b.classList.toggle('active', ['dashboard','sessions','stations'][i] === page);
+  });
+  state.currentPage = page;
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'sessions') renderSessions();
+  if (page === 'stations') renderStationsPage();
+}
+
+// --- data ---
+async function loadData() {
+  const [sessions, stats, runStats] = await Promise.all([
+    fetch('/api/sessions').then(r => r.json()),
+    fetch('/api/stats/stations').then(r => r.json()),
+    fetch('/api/stats/runs').then(r => r.json()),
+  ]);
+  state.sessions = sessions;
+  state.stats = stats;
+  state.runStats = runStats;
+}
+
+// --- dashboard ---
+function renderDashboard() {
+  const allSessions = state.sessions;
+  const s = allSessions; // all sessions (for counts)
+  const full = allSessions.filter(x => x.session_type === 'full');
+  if (!s.length) {
+    document.getElementById('dash-empty').style.display = '';
+    document.getElementById('dash-content').style.display = 'none';
+    return;
+  }
+  document.getElementById('dash-empty').style.display = 'none';
+  document.getElementById('dash-content').style.display = '';
+
+  // KPIs — tiempo total solo para carreras completas
+  const lastFull = full[0];
+  const prevFull = full[1];
+  const diff = (lastFull && prevFull) ? lastFull.duration_s - prevFull.duration_s : null;
+  const best = full.length ? Math.min(...full.map(x => x.duration_s)) : null;
+  document.getElementById('kpi-grid').innerHTML = `
+    <div class="card">
+      <div class="card-title">Sesiones totales</div>
+      <div class="stat-val">${s.length}</div>
+      <div class="stat-sub">${full.length} completas</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Última completa</div>
+      <div class="stat-val">${lastFull ? fmt(lastFull.duration_s) : '—'}</div>
+      ${diff !== null ? `<div class="stat-sub" style="color:${diff<0?'var(--good)':'var(--bad)'}">
+        ${diff<0?'▼':'▲'} ${fmt(Math.abs(diff))} vs anterior
+      </div>` : ''}
+    </div>
+    <div class="card">
+      <div class="card-title">Mejor tiempo</div>
+      <div class="stat-val" style="color:var(--good)">${best ? fmt(best) : '—'}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Promedio completas</div>
+      <div class="stat-val">${full.length ? fmt(Math.round(full.reduce((a,b)=>a+b.duration_s,0)/full.length)) : '—'}</div>
+    </div>
+  `;
+
+  // chart total — solo carreras completas
+  const ctx1 = document.getElementById('chart-total').getContext('2d');
+  if (chartTotal) chartTotal.destroy();
+  const reversed = [...full].reverse();
+  chartTotal = new Chart(ctx1, {
+    type: 'line',
+    data: {
+      labels: reversed.map(x => x.date.slice(5)),
+      datasets: [{
+        data: reversed.map(x => x.duration_s / 60),
+        borderColor: '#f97316',
+        backgroundColor: 'rgba(249,115,22,.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: '#f97316',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#888' }, grid: { color: '#222' } },
+        y: { ticks: { color: '#888', callback: v => fmt(Math.round(v*60)) }, grid: { color: '#222' } },
+      }
+    }
+  });
+
+  // station ranking
+  const stats = state.stats;
+  if (stats.length) {
+    const maxAvg = Math.max(...stats.map(x => x.avg_s));
+    document.getElementById('station-ranking').innerHTML = stats
+      .sort((a,b) => a.avg_s - b.avg_s)
+      .map(st => `
+        <div style="margin-bottom:10px;">
+          <div class="flex gap8" style="margin-bottom:4px;">
+            <span style="font-size:13px;">${st.label}</span>
+            <span class="ml-auto" style="font-size:13px;font-variant-numeric:tabular-nums;color:var(--accent);">${fmt(Math.round(st.avg_s))}</span>
+          </div>
+          <div class="bar-wrap">
+            <div class="bar-fill" style="width:${(st.avg_s/maxAvg*100).toFixed(1)}%"></div>
+          </div>
+        </div>
+      `).join('');
+  }
+
+  // race estimate
+  await renderRaceEstimate();
+
+  // runs
+  renderRunStats();
+
+  // station select
+  const sel = document.getElementById('station-select');
+  sel.innerHTML = STATIONS.filter(st => stats.find(s => s.label === st))
+    .map(st => `<option value="${st}">${st}</option>`).join('');
+  renderStationChart();
+}
+
+async function renderRaceEstimate() {
+  const data = await fetch('/api/stats/estimate').then(r => r.json());
+  const section = document.getElementById('dash-estimate-section');
+  const el = document.getElementById('dash-estimate-content');
+
+  if (!data.est_1km_s && data.missing_stations.length === 8) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = '';
+
+  const missing = data.missing_stations;
+  const complete = missing.length === 0 && data.est_1km_s;
+
+  el.innerHTML = `
+    <div class="grid-2" style="gap:16px;margin-bottom:20px;">
+      <div style="padding:16px;background:var(--bg);border-radius:10px;text-align:center;">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">ESTIMADO (TIEMPOS MEDIOS)</div>
+        <div style="font-size:36px;font-weight:800;color:var(--accent)">${data.total_avg_s ? fmt(data.total_avg_s) : '—'}</div>
+        ${!complete ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">faltan datos: ${missing.join(', ')}</div>` : ''}
+      </div>
+      <div style="padding:16px;background:var(--bg);border-radius:10px;text-align:center;">
+        <div style="font-size:12px;color:var(--good);margin-bottom:6px;">ESTIMADO (MEJORES TIEMPOS)</div>
+        <div style="font-size:36px;font-weight:800;color:var(--good)">${data.total_best_s ? fmt(data.total_best_s) : '—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">si replicas tus mejores marcas</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Segmento</th><th>Medio</th><th>Mejor</th>
+      </tr></thead>
+      <tbody>
+        ${data.segments.map((seg, i) => `
+          <tr>
+            <td style="color:var(--run)">🏃 ${seg.run_label}</td>
+            <td style="font-variant-numeric:tabular-nums">${seg.run_avg_s ? fmt(seg.run_avg_s) : '—'}</td>
+            <td style="font-variant-numeric:tabular-nums;color:var(--good)">${seg.run_best_s ? fmt(seg.run_best_s) : '—'}</td>
+          </tr>
+          <tr>
+            <td style="color:var(--accent)">💪 ${seg.station_label}</td>
+            <td style="font-variant-numeric:tabular-nums">${seg.station_avg_s ? fmt(Math.round(seg.station_avg_s)) : '<span style="color:var(--muted)">sin datos</span>'}</td>
+            <td style="font-variant-numeric:tabular-nums;color:var(--good)">${seg.station_best_s ? fmt(seg.station_best_s) : '—'}</td>
+          </tr>
+        `).join('')}
+        <tr style="border-top:2px solid var(--border);">
+          <td style="font-weight:700">TOTAL</td>
+          <td style="font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)">${fmt(data.total_avg_s)}</td>
+          <td style="font-weight:700;font-variant-numeric:tabular-nums;color:var(--good)">${fmt(data.total_best_s)}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function renderRunStats() {
+  const runs = state.runStats || [];
+  const el = document.getElementById('dash-runs-content');
+  if (!runs.length) {
+    el.innerHTML = '<p style="color:var(--muted);font-size:13px;">Sin datos de carrera. Asegúrate de introducir la distancia en los splits de tipo Run.</p>';
+    return;
+  }
+
+  // estimate 1km from best pace across all distances
+  const bestPace = Math.min(...runs.map(r => r.avg_pace_per_m));
+  const est1km = Math.round(bestPace * 1000);
+  const bestPaceRun = runs.find(r => r.avg_pace_per_m === bestPace);
+
+  el.innerHTML = `
+    <div class="grid-${Math.min(runs.length + 1, 4)}" style="margin-bottom:16px;">
+      ${runs.map(r => `
+        <div style="padding:12px;background:var(--bg);border-radius:8px;">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${r.distance_m} M</div>
+          <div style="font-size:22px;font-weight:700;color:var(--run)">${fmt(Math.round(r.avg_s))}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;">
+            mejor ${fmt(r.best_s)} · ${r.count} sesión${r.count > 1 ? 'es' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);">ritmo ${fmt(Math.round(r.avg_pace_per_m * 1000))}/km</div>
+        </div>
+      `).join('')}
+      <div style="padding:12px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:8px;">
+        <div style="font-size:11px;color:var(--accent);margin-bottom:6px;">ESTIMADO 1KM</div>
+        <div style="font-size:22px;font-weight:700;color:var(--accent)">${fmt(est1km)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">basado en ritmo de ${bestPaceRun.distance_m}m</div>
+      </div>
+    </div>
+  `;
+}
+
+async function renderStationChart() {
+  const label = document.getElementById('station-select').value;
+  if (!label) return;
+  const data = await fetch(`/api/stats/stations/${encodeURIComponent(label)}`).then(r => r.json());
+  const ctx = document.getElementById('chart-station').getContext('2d');
+  if (chartStation) chartStation.destroy();
+  chartStation = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(x => x.date.slice(5)),
+      datasets: [{
+        label,
+        data: data.map(x => x.duration_s / 60),
+        borderColor: '#f97316',
+        backgroundColor: 'rgba(249,115,22,.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 5,
+        pointBackgroundColor: '#f97316',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#888' }, grid: { color: '#222' } },
+        y: { ticks: { color: '#888', callback: v => fmt(Math.round(v*60)) }, grid: { color: '#222' } },
+      }
+    }
+  });
+}
+
+// --- sessions page ---
+function renderSessions() {
+  const s = state.sessions;
+  const el = document.getElementById('sessions-list');
+  if (!s.length) { el.innerHTML = '<div class="empty">Sin sesiones. Importa tu export de Apple Health.</div>'; return; }
+  el.innerHTML = `
+    <div class="card">
+      <table>
+        <thead><tr>
+          <th>Fecha</th><th>Duración</th><th>Segmentos</th><th></th>
+        </tr></thead>
+        <tbody>${s.map(ss => `
+          <tr style="cursor:pointer" onclick="openSessionDetail(${ss.id})">
+            <td>${fmtDate(ss.date)}</td>
+            <td style="font-variant-numeric:tabular-nums">${fmt(ss.duration_s)}</td>
+            <td>${ss.segment_count}</td>
+            <td style="text-align:right"><span style="color:var(--muted);font-size:12px;">ver →</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// --- session detail ---
+let currentSession = null;
+
+async function openSessionDetail(id) {
+  currentSession = await fetch(`/api/sessions/${id}`).then(r => r.json());
+  renderSessionView();
+  document.getElementById('session-edit-btn').onclick = () => renderSessionEdit();
+  document.getElementById('session-delete-btn').onclick = () => deleteSession(id);
+  document.getElementById('modal-session').classList.add('open');
+}
+
+function renderSessionView() {
+  const s = currentSession;
+  document.getElementById('session-detail-title').textContent = fmtDate(s.date) + ' · ' + fmt(s.duration_s);
+  document.getElementById('session-detail-body').style.display = '';
+  document.getElementById('session-edit-body').style.display = 'none';
+  document.getElementById('session-edit-btn').style.display = '';
+  document.getElementById('session-save-btn').style.display = 'none';
+  document.getElementById('session-cancel-btn').style.display = 'none';
+  const typeBadge = s.session_type === 'full'
+    ? '<span class="badge" style="background:rgba(34,197,94,.15);color:#86efac;">Carrera completa</span>'
+    : '<span class="badge" style="background:rgba(255,255,255,.08);color:var(--muted);">Entrenamiento</span>';
+  document.getElementById('session-detail-body').innerHTML = `
+    <div style="margin-bottom:12px;">${typeBadge}</div>
+    <table>
+      <thead><tr><th>#</th><th>Segmento</th><th>Tiempo</th><th>Distancia</th></tr></thead>
+      <tbody>${s.segments.map(sg => `
+        <tr>
+          <td style="color:var(--muted)">${sg.position}</td>
+          <td>
+            <span class="badge badge-${sg.type}">${sg.type === 'run' ? '🏃' : '💪'}</span>
+            ${sg.label}
+          </td>
+          <td style="font-variant-numeric:tabular-nums;color:var(--accent)">${fmt(sg.duration_s)}</td>
+          <td style="color:var(--muted)">${sg.distance_m ? sg.distance_m + ' m' : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    ${s.notes ? `<p style="margin-top:12px;color:var(--muted);font-size:13px;">${s.notes}</p>` : ''}
+  `;
+}
+
+let editSegments = [];
+
+function renderSessionEdit() {
+  const s = currentSession;
+  // copy segments into mutable edit state
+  editSegments = s.segments.map(sg => ({ ...sg }));
+
+  document.getElementById('session-detail-body').style.display = 'none';
+  document.getElementById('session-edit-body').style.display = '';
+  document.getElementById('session-edit-btn').style.display = 'none';
+  document.getElementById('session-save-btn').style.display = '';
+  document.getElementById('session-cancel-btn').style.display = '';
+  document.getElementById('session-cancel-btn').onclick = renderSessionView;
+  document.getElementById('session-save-btn').onclick = saveSessionEdit;
+
+  const firstStation = s.segments.find(sg => sg.type === 'station');
+  const firstStationIdx = firstStation ? STATIONS.indexOf(firstStation.label) : 0;
+
+  renderEditRows(firstStationIdx);
+}
+
+function renderEditRows(firstStationIdx) {
+  if (firstStationIdx === undefined) {
+    const sel = document.getElementById('edit-first-station');
+    firstStationIdx = sel ? parseInt(sel.value) : 0;
+  }
+
+  document.getElementById('session-edit-body').innerHTML = `
+    <div style="margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <label style="font-size:13px;color:var(--muted);">Tipo</label>
+      <select id="edit-session-type">
+        <option value="training" ${currentSession.session_type!=='full'?'selected':''}>Entrenamiento</option>
+        <option value="full" ${currentSession.session_type==='full'?'selected':''}>Carrera completa</option>
+      </select>
+      <label style="font-size:13px;color:var(--muted);">Primera estación</label>
+      <select id="edit-first-station" onchange="updateEditLabels()">
+        ${STATIONS.map((st,i) => `<option value="${i}" ${i===firstStationIdx?'selected':''}>${st}</option>`).join('')}
+      </select>
+    </div>
+    <div class="splits-config">
+      <div class="split-row" style="font-size:11px;color:var(--muted);">
+        <span>#</span><span>Tiempo (m:ss)</span><span>Tipo</span><span>Label</span><span>Dist (m)</span><span></span>
+      </div>
+      ${editSegments.map((sg, i) => `
+        <div class="split-row" id="edit-row-${i}">
+          <span style="color:var(--muted)">${i+1}</span>
+          <input type="text" id="edit-dur-${i}" value="${fmt(sg.duration_s)}"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--accent);border-radius:6px;padding:4px 6px;font-size:13px;font-variant-numeric:tabular-nums;width:100%;">
+          <select id="edit-type-${i}" onchange="updateEditLabels()">
+            <option value="run" ${sg.type==='run'?'selected':''}>🏃 Run</option>
+            <option value="station" ${sg.type==='station'?'selected':''}>💪 Station</option>
+            <option value="skip">— Omitir</option>
+          </select>
+          <span id="edit-label-${i}" style="font-size:13px;"></span>
+          <input type="number" id="edit-dist-${i}" placeholder="m" value="${sg.distance_m||''}" min="0" max="5000"
+            style="background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 6px;font-size:12px;width:100%;display:none;">
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-ghost btn-sm" title="Dividir" onclick="splitSegment(${i})" style="padding:3px 7px;">✂️</button>
+            <button class="btn btn-ghost btn-sm" title="Eliminar" onclick="deleteSegment(${i})" style="padding:3px 7px;color:var(--bad);">✕</button>
+          </div>
+        </div>`).join('')}
+    </div>
+    <div style="margin-top:12px;">
+      <input type="text" id="edit-notes" placeholder="Notas (opcional)" value="${currentSession.notes||''}">
+    </div>
+  `;
+  updateEditLabels();
+}
+
+function parseFmt(str) {
+  // parse "m:ss" or seconds integer string → seconds
+  str = str.trim();
+  if (str.includes(':')) {
+    const [m, s] = str.split(':').map(Number);
+    return m * 60 + (s || 0);
+  }
+  return parseInt(str) || 0;
+}
+
+function updateEditLabels() {
+  const firstStation = parseInt(document.getElementById('edit-first-station').value);
+  let stationIdx = 0;
+  editSegments.forEach((_, i) => {
+    const type = document.getElementById(`edit-type-${i}`).value;
+    const labelEl = document.getElementById(`edit-label-${i}`);
+    const distEl = document.getElementById(`edit-dist-${i}`);
+    if (type === 'run') {
+      labelEl.textContent = 'Carrera';
+      labelEl.style.color = 'var(--run)';
+      distEl.style.display = '';
+    } else if (type === 'station') {
+      const idx = (firstStation + stationIdx) % STATIONS.length;
+      labelEl.textContent = STATIONS[idx];
+      labelEl.style.color = 'var(--accent)';
+      distEl.style.display = 'none';
+      stationIdx++;
+    } else {
+      labelEl.textContent = '—';
+      labelEl.style.color = 'var(--muted)';
+      distEl.style.display = 'none';
+    }
+  });
+}
+
+function splitSegment(i) {
+  const total = parseFmt(document.getElementById(`edit-dur-${i}`).value);
+  const input = prompt(`Divide ${fmt(total)} en dos partes.\nIntroduce el tiempo de la PRIMERA parte (formato m:ss o segundos):`);
+  if (!input) return;
+  const firstPart = parseFmt(input);
+  if (firstPart <= 0 || firstPart >= total) {
+    alert('El tiempo debe ser mayor que 0 y menor que el total.');
+    return;
+  }
+  const secondPart = total - firstPart;
+  const firstStationIdx = parseInt(document.getElementById('edit-first-station').value);
+  // snapshot types before re-render
+  editSegments.forEach((sg, j) => {
+    sg._type = document.getElementById(`edit-type-${j}`).value;
+    sg._dist = parseInt(document.getElementById(`edit-dist-${j}`).value) || null;
+    sg.duration_s = parseFmt(document.getElementById(`edit-dur-${j}`).value);
+  });
+  const original = editSegments[i];
+  const newSeg = { ...original, duration_s: secondPart, _type: original._type, _dist: null };
+  editSegments[i] = { ...original, duration_s: firstPart };
+  editSegments.splice(i + 1, 0, newSeg);
+  // apply saved types back
+  editSegments.forEach(sg => { if (sg._type) { sg.type = sg._type; } });
+  renderEditRows(firstStationIdx);
+}
+
+function deleteSegment(i) {
+  const firstStationIdx = parseInt(document.getElementById('edit-first-station').value);
+  editSegments.forEach((sg, j) => {
+    sg._type = document.getElementById(`edit-type-${j}`).value;
+    sg.duration_s = parseFmt(document.getElementById(`edit-dur-${j}`).value);
+    sg.distance_m = parseInt(document.getElementById(`edit-dist-${j}`).value) || null;
+  });
+  editSegments.splice(i, 1);
+  editSegments.forEach(sg => { if (sg._type) sg.type = sg._type; });
+  renderEditRows(firstStationIdx);
+}
+
+async function saveSessionEdit() {
+  const s = currentSession;
+  const firstStation = parseInt(document.getElementById('edit-first-station').value);
+  const notes = document.getElementById('edit-notes').value.trim() || null;
+  let stationIdx = 0;
+  const segments = [];
+  editSegments.forEach((sg, i) => {
+    const type = document.getElementById(`edit-type-${i}`).value;
+    if (type === 'skip') return;
+    const duration_s = parseFmt(document.getElementById(`edit-dur-${i}`).value);
+    const pos = segments.length + 1;
+    if (type === 'run') {
+      const dist = parseInt(document.getElementById(`edit-dist-${i}`).value) || null;
+      segments.push({ position: pos, type: 'run', label: 'Carrera', duration_s, distance_m: dist });
+    } else {
+      const idx = (firstStation + stationIdx) % STATIONS.length;
+      segments.push({ position: pos, type: 'station', label: STATIONS[idx], duration_s, distance_m: null });
+      stationIdx++;
+    }
+  });
+  const session_type = document.getElementById('edit-session-type').value;
+  await fetch(`/api/sessions/${s.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date: s.date, duration_s: s.duration_s, session_type, segments, notes }),
+  });
+  currentSession = await fetch(`/api/sessions/${s.id}`).then(r => r.json());
+  editSegments = [];
+  await loadData();
+  renderSessionView();
+  if (state.currentPage === 'sessions') renderSessions();
+  if (state.currentPage === 'dashboard') renderDashboard();
+}
+
+function closeSessionDetail() {
+  document.getElementById('modal-session').classList.remove('open');
+  currentSession = null;
+}
+
+async function deleteSession(id) {
+  if (!confirm('¿Eliminar esta sesión?')) return;
+  await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+  closeSessionDetail();
+  await loadData();
+  renderSessions();
+  if (state.currentPage === 'dashboard') renderDashboard();
+}
+
+// --- stations page ---
+function renderStationsPage() {
+  const stats = state.stats;
+  const el = document.getElementById('stations-grid');
+  if (!stats.length) { el.innerHTML = '<div class="empty">Sin datos todavía.</div>'; return; }
+
+  el.innerHTML = STATIONS.filter(st => stats.find(s => s.label === st)).map(st => {
+    const s = stats.find(x => x.label === st);
+    return `
+      <div class="card" style="cursor:pointer" onclick="showPage('dashboard');document.getElementById('station-select').value='${st}';renderStationChart()">
+        <div class="card-title">${st}</div>
+        <div class="grid-3" style="gap:12px;margin-bottom:8px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted)">MEJOR</div>
+            <div style="font-size:20px;font-weight:700;color:var(--good)">${fmt(s.best_s)}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted)">MEDIO</div>
+            <div style="font-size:20px;font-weight:700;color:var(--accent)">${fmt(Math.round(s.avg_s))}</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted)">PEOR</div>
+            <div style="font-size:20px;font-weight:700;color:var(--bad)">${fmt(s.worst_s)}</div>
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">${s.count} sesión${s.count>1?'es':''}</div>
+      </div>`;
+  }).join('');
+}
+
+// --- import ---
+async function resetDatabase() {
+  const input = prompt('Escribe BORRAR para confirmar:');
+  if (input !== 'BORRAR') return;
+  await fetch('/api/database', { method: 'DELETE' });
+  closeImport();
+  await loadData();
+  showPage(state.currentPage);
+}
+
+function openImport() { document.getElementById('modal-import').classList.add('open'); showImportStep('upload'); }
+function closeImport() { document.getElementById('modal-import').classList.remove('open'); }
+function showImportStep(step) {
+  document.getElementById('import-step-upload').style.display = step === 'upload' ? '' : 'none';
+  document.getElementById('import-step-sessions').style.display = step === 'sessions' ? '' : 'none';
+}
+
+let browsePath = '';
+let selectedFilePath = '';
+
+async function browseDir(path) {
+  const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  browsePath = data.path;
+  document.getElementById('browse-path').textContent = data.path;
+  document.getElementById('browse-up').disabled = !data.parent;
+  document.getElementById('browse-list').innerHTML = data.entries.map(e => `
+    <div onclick="${e.is_dir ? `browseDir('${e.path.replace(/'/g,"\\'")}')` : `selectFile('${e.path.replace(/'/g,"\\'")}', '${e.name.replace(/'/g,"\\'")}' )`}"
+      style="padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:13px;"
+      onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''">
+      <span>${e.is_dir ? '📁' : '📄'}</span>
+      <span>${e.name}</span>
+    </div>
+  `).join('') || '<div style="padding:12px;color:var(--muted);font-size:13px;">Carpeta vacía</div>';
+}
+
+function browseUp() {
+  fetch(`/api/browse?path=${encodeURIComponent(browsePath)}`).then(r => r.json()).then(d => {
+    if (d.parent) browseDir(d.parent);
+  });
+}
+
+function selectFile(path, name) {
+  selectedFilePath = path;
+  const el = document.getElementById('browse-selected');
+  el.style.display = 'flex';
+  document.getElementById('browse-selected-name').textContent = '📄 ' + name;
+}
+
+async function handlePathImport() {
+  const path = selectedFilePath;
+  if (!path) return;
+  document.getElementById('import-loading').style.display = '';
+  const res = await fetch('/api/import/parse-path', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  document.getElementById('import-loading').style.display = 'none';
+  if (!res.ok) { alert('Error: ' + await res.text()); return; }
+  pendingSessions = await res.json();
+  renderImportSessions(pendingSessions);
+  showImportStep('sessions');
+}
+
+async function handleFileSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const BIG = 500 * 1024 * 1024; // 500 MB
+  if (file.size > BIG) {
+    document.getElementById('import-large-file').style.display = '';
+    document.getElementById('browse-selected').style.display = 'none';
+    selectedFilePath = '';
+    browseDir('');
+  } else {
+    // small enough — upload directly
+    document.getElementById('import-loading').style.display = '';
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/import/parse', { method: 'POST', body: form });
+    document.getElementById('import-loading').style.display = 'none';
+    if (!res.ok) { alert('Error procesando el archivo'); return; }
+    pendingSessions = await res.json();
+    renderImportSessions(pendingSessions);
+    showImportStep('sessions');
+  }
+}
+
+function isSunday(dateStr) {
+  // parse as local date to avoid UTC offset shifting the day
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay() === 0;
+}
+
+function renderImportSessions(sessions) {
+  const newOnes = sessions.filter(s => !s.already_imported);
+  const autoSelected = newOnes.filter(s => isSunday(s.date)).length;
+  document.getElementById('import-summary').textContent =
+    `${sessions.length} sesiones encontradas · ${newOnes.length} nuevas · ${autoSelected} domingos pre-seleccionados`;
+
+  document.getElementById('import-sessions-list').innerHTML = sessions.map((s, si) => {
+    const imported = s.already_imported;
+    const sunday = isSunday(s.date);
+    const preChecked = !imported && sunday;
+    return `
+      <div class="session-candidate ${imported ? 'imported' : ''}" id="candidate-${si}">
+        <div class="session-header">
+          <input type="checkbox" id="chk-${si}" ${imported ? 'disabled' : ''} ${preChecked ? 'checked' : ''}>
+          <div class="session-date">${fmtDate(s.date)}</div>
+          ${sunday && !imported ? '<span class="badge" style="background:rgba(249,115,22,.15);color:var(--accent)">domingo</span>' : ''}
+          <div class="session-dur">${fmt(s.duration_s)} · ${s.splits.length} splits</div>
+          ${imported ? '<span class="badge" style="background:rgba(255,255,255,.1);color:var(--muted)">Ya importada</span>' : ''}
+        </div>
+        ${!imported ? `
+        <div style="margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:13px;color:var(--muted);">Tipo</label>
+          <select id="session-type-${si}">
+            <option value="training">Entrenamiento</option>
+            <option value="full">Carrera completa</option>
+          </select>
+          <label style="font-size:13px;color:var(--muted);">Primer split</label>
+          <select id="first-split-${si}">
+            ${s.splits.map((_,i) => `<option value="${i}" ${i===0?'selected':''}>${i+1}. ${fmt(s.splits[i])}</option>`).join('')}
+          </select>
+          <label style="font-size:13px;color:var(--muted);">Primera estación</label>
+          <select id="first-station-${si}">
+            ${STATIONS.map((st,i) => `<option value="${i}">${st}</option>`).join('')}
+          </select>
+        </div>
+        <div class="splits-config">
+          <div class="split-row" style="font-size:11px;color:var(--muted);">
+            <span>#</span><span>Tiempo</span><span>Tipo</span><span>Estación/Distancia</span><span>Dist (m)</span>
+          </div>
+          ${s.splits.map((sp, i) => `
+            <div class="split-row" id="split-row-${si}-${i}">
+              <span style="color:var(--muted)">${i+1}</span>
+              <span class="split-time">${fmt(sp)}</span>
+              <select onchange="updateSplitRows(${si})" id="split-type-${si}-${i}">
+                <option value="run">🏃 Run</option>
+                <option value="station">💪 Station</option>
+                <option value="skip">— Omitir</option>
+              </select>
+              <span id="split-label-${si}-${i}" class="split-label">—</span>
+              <input type="number" id="split-dist-${si}-${i}" placeholder="m" min="0" max="5000" style="display:none">
+            </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+  }).join('');
+
+  // init split type assignment for new sessions
+  sessions.forEach((s, si) => {
+    if (!s.already_imported) {
+      initSplitAssignment(si);
+      document.getElementById(`first-split-${si}`).onchange = () => initSplitAssignment(si);
+      document.getElementById(`first-station-${si}`).onchange = () => initSplitAssignment(si);
+    }
+  });
+}
+
+function initSplitAssignment(si) {
+  const s = pendingSessions[si];
+  const firstSplit = parseInt(document.getElementById(`first-split-${si}`).value);
+  const firstStation = parseInt(document.getElementById(`first-station-${si}`).value);
+
+  s.splits.forEach((_, i) => {
+    const typeEl = document.getElementById(`split-type-${si}-${i}`);
+    if (i < firstSplit) {
+      typeEl.value = 'skip';
+    } else {
+      const pos = i - firstSplit;
+      typeEl.value = pos % 2 === 0 ? 'run' : 'station';
+    }
+  });
+  updateSplitRows(si);
+}
+
+function updateSplitRows(si) {
+  const s = pendingSessions[si];
+  const firstStation = parseInt(document.getElementById(`first-station-${si}`).value);
+  let stationIdx = 0;
+
+  s.splits.forEach((_, i) => {
+    const typeEl = document.getElementById(`split-type-${si}-${i}`);
+    const labelEl = document.getElementById(`split-label-${si}-${i}`);
+    const distEl = document.getElementById(`split-dist-${si}-${i}`);
+    const type = typeEl.value;
+
+    if (type === 'skip') {
+      labelEl.textContent = '—';
+      labelEl.style.color = 'var(--muted)';
+      distEl.style.display = 'none';
+    } else if (type === 'run') {
+      labelEl.textContent = 'Carrera';
+      labelEl.style.color = 'var(--run)';
+      distEl.style.display = '';
+      stationIdx; // don't increment
+    } else {
+      const idx = (firstStation + stationIdx) % STATIONS.length;
+      labelEl.textContent = STATIONS[idx];
+      labelEl.style.color = 'var(--accent)';
+      distEl.style.display = 'none';
+      stationIdx++;
+    }
+  });
+}
+
+async function saveAllSessions() {
+  const toSave = pendingSessions
+    .map((s, si) => ({ s, si }))
+    .filter(({ si }) => {
+      const chk = document.getElementById(`chk-${si}`);
+      return chk && !chk.disabled && chk.checked;
+    });
+
+  const saveBtn = document.querySelector('#import-step-sessions .btn-primary');
+  const total = toSave.length;
+  saveBtn.disabled = true;
+
+  for (const [idx, { s, si }] of toSave.entries()) {
+    saveBtn.textContent = `Guardando ${idx + 1} / ${total}...`;
+    await new Promise(r => setTimeout(r, 0)); // fuerza repintado
+    const firstStation = parseInt(document.getElementById(`first-station-${si}`).value);
+    let stationIdx = 0;
+    const segments = [];
+
+    s.splits.forEach((sp, i) => {
+      const type = document.getElementById(`split-type-${si}-${i}`).value;
+      if (type === 'skip') return;
+
+      const pos = segments.length + 1;
+      if (type === 'run') {
+        const distEl = document.getElementById(`split-dist-${si}-${i}`);
+        const dist = distEl ? parseInt(distEl.value) || null : null;
+        segments.push({ position: pos, type: 'run', label: 'Carrera', duration_s: sp, distance_m: dist });
+      } else {
+        const idx = (firstStation + stationIdx) % STATIONS.length;
+        segments.push({ position: pos, type: 'station', label: STATIONS[idx], duration_s: sp, distance_m: null });
+        stationIdx++;
+      }
+    });
+
+    const session_type = document.getElementById(`session-type-${si}`)?.value || 'training';
+    await fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: s.date, duration_s: s.duration_s, session_type, segments }),
+    });
+  }
+
+  saveBtn.textContent = 'Guardar sesiones';
+  saveBtn.disabled = false;
+  closeImport();
+  await loadData();
+  showPage(state.currentPage);
+}
+
+// --- init ---
+loadData().then(() => renderDashboard());
+</script>
+</body>
+</html>
