@@ -238,22 +238,42 @@ input[type=text], textarea { background: var(--card); border: 1px solid var(--bo
     </div>
 
     <div id="import-step-upload">
-      <input type="file" id="import-file" accept=".xml,.zip" style="display:none" onchange="handleFileSelected(this)">
-      <button class="btn btn-primary" onclick="document.getElementById('import-file').click()">Seleccionar archivo export.xml</button>
-      <div id="import-large-file" style="display:none;margin-top:16px;">
-        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">📦 Archivo grande — selecciona el archivo desde el explorador:</p>
-        <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;">
-          <div style="background:var(--bg);padding:8px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
-            <button class="btn btn-ghost btn-sm" id="browse-up" onclick="browseUp()">↑</button>
-            <span id="browse-path" style="font-size:12px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
-          </div>
-          <div id="browse-list" style="max-height:220px;overflow-y:auto;"></div>
-        </div>
-        <div id="browse-selected" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.4);border-radius:8px;display:flex;align-items:center;gap:8px;">
-          <span id="browse-selected-name" style="font-size:13px;flex:1;"></span>
-          <button class="btn btn-primary btn-sm" onclick="handlePathImport()">Procesar</button>
+      <!-- source selector -->
+      <div id="import-source-select" style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" style="flex:1;min-width:120px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:6px;" onclick="showImportSource('local-parse')">
+          <span style="font-size:24px;">💻</span>
+          <span style="font-weight:600;">Mi Mac</span>
+          <span style="font-size:12px;color:var(--muted);text-align:center;">Parsear aquí y subir</span>
+        </button>
+        <button class="btn btn-ghost" style="flex:1;min-width:120px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:6px;" onclick="showImportSource('server')">
+          <span style="font-size:24px;">🖥️</span>
+          <span style="font-weight:600;">Servidor</span>
+          <span style="font-size:12px;color:var(--muted);text-align:center;">Ruta en el servidor</span>
+        </button>
+      </div>
+
+      <!-- local parse: run script on mac, upload result -->
+      <div id="import-source-local-parse" style="display:none;">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px;">Ejecuta esto en tu Mac y luego sube el JSON resultante:</p>
+        <pre id="parse-cmd" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;white-space:pre-wrap;color:var(--accent);margin-bottom:12px;"></pre>
+        <input type="file" id="import-parsed-file" accept=".json" style="display:none" onchange="handleParsedJsonSelected(this)">
+        <button class="btn btn-primary" onclick="document.getElementById('import-parsed-file').click()">Subir hyrox_sessions.json</button>
+      </div>
+
+      <!-- local file upload (fallback for small files) -->
+      <div id="import-source-local" style="display:none;">
+        <input type="file" id="import-file" accept=".xml,.zip" style="display:none" onchange="handleFileSelected(this)">
+        <button class="btn btn-primary" onclick="document.getElementById('import-file').click()">Seleccionar export.xml</button>
+      </div>
+
+      <!-- server path -->
+      <div id="import-source-server" style="display:none;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="server-path-input" placeholder="/opt/hyrox/data/export.xml" style="flex:1;">
+          <button class="btn btn-primary" onclick="handlePathImport()">Procesar</button>
         </div>
       </div>
+
       <div id="import-loading" style="display:none;color:var(--muted);margin-top:12px;font-size:14px;">Procesando...</div>
       <div id="import-error" style="display:none;margin-top:12px;padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:8px;font-size:13px;color:#fca5a5;"></div>
       <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
@@ -1018,44 +1038,60 @@ async function resetDatabase() {
   showPage(state.currentPage);
 }
 
-function openImport() { document.getElementById('modal-import').classList.add('open'); showImportStep('upload'); hideImportError(); }
+function openImport() {
+  document.getElementById('modal-import').classList.add('open');
+  showImportStep('upload');
+  hideImportError();
+  document.getElementById('import-source-select').style.display = 'flex';
+  document.getElementById('import-source-local-parse').style.display = 'none';
+  document.getElementById('import-source-local').style.display = 'none';
+  document.getElementById('import-source-server').style.display = 'none';
+  document.getElementById('import-loading').style.display = 'none';
+}
 function closeImport() { document.getElementById('modal-import').classList.remove('open'); }
 function showImportStep(step) {
   document.getElementById('import-step-upload').style.display = step === 'upload' ? '' : 'none';
   document.getElementById('import-step-sessions').style.display = step === 'sessions' ? '' : 'none';
 }
 
-let browsePath = '';
-let selectedFilePath = '';
-
-async function browseDir(path) {
-  const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
-  if (!res.ok) return;
-  const data = await res.json();
-  browsePath = data.path;
-  document.getElementById('browse-path').textContent = data.path;
-  document.getElementById('browse-up').disabled = !data.parent;
-  document.getElementById('browse-list').innerHTML = data.entries.map(e => `
-    <div onclick="${e.is_dir ? `browseDir('${e.path.replace(/'/g,"\\'")}')` : `selectFile('${e.path.replace(/'/g,"\\'")}', '${e.name.replace(/'/g,"\\'")}' )`}"
-      style="padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);font-size:13px;"
-      onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''">
-      <span>${e.is_dir ? '📁' : '📄'}</span>
-      <span>${e.name}</span>
-    </div>
-  `).join('') || '<div style="padding:12px;color:var(--muted);font-size:13px;">Carpeta vacía</div>';
+function showImportSource(src) {
+  document.getElementById('import-source-select').style.display = 'none';
+  document.getElementById('import-source-local-parse').style.display = src === 'local-parse' ? '' : 'none';
+  document.getElementById('import-source-local').style.display = src === 'local' ? '' : 'none';
+  document.getElementById('import-source-server').style.display = src === 'server' ? '' : 'none';
+  if (src === 'server') {
+    document.getElementById('server-path-input').value = '/opt/hyrox/data/export.xml';
+    document.getElementById('server-path-input').focus();
+  }
+  if (src === 'local-parse') {
+    const cmd = `cd ~/Projects/hyrox-analytics\npython3 - <<'EOF'\nimport json, sys\nsys.path.insert(0, '.')\nfrom parser import extract_hyrox_sessions\nsessions = extract_hyrox_sessions('/Users/miguelizaga/Downloads/apple_health_export/export.xml')\nwith open('/tmp/hyrox_sessions.json', 'w') as f:\n    json.dump(sessions, f)\nprint(f'Listo: {len(sessions)} sesiones → /tmp/hyrox_sessions.json')\nEOF`;
+    document.getElementById('parse-cmd').textContent = cmd;
+  }
 }
 
-function browseUp() {
-  fetch(`/api/browse?path=${encodeURIComponent(browsePath)}`).then(r => r.json()).then(d => {
-    if (d.parent) browseDir(d.parent);
-  });
-}
-
-function selectFile(path, name) {
-  selectedFilePath = path;
-  const el = document.getElementById('browse-selected');
-  el.style.display = 'flex';
-  document.getElementById('browse-selected-name').textContent = '📄 ' + name;
+async function handleParsedJsonSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  hideImportError();
+  const loadingEl = document.getElementById('import-loading');
+  loadingEl.style.display = '';
+  loadingEl.textContent = 'Subiendo...';
+  try {
+    const text = await file.text();
+    const sessions = JSON.parse(text);
+    const res = await fetch('/api/import/upload-parsed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sessions),
+    });
+    loadingEl.style.display = 'none';
+    if (!res.ok) { showImportError(await res.text()); return; }
+    pendingSessions = await res.json();
+    renderImportSessions(pendingSessions);
+    showImportStep('sessions');
+  } catch(e) {
+    showImportError(e.message);
+  }
 }
 
 function showImportError(msg) {
@@ -1091,8 +1127,8 @@ async function pollJob(job_id) {
 }
 
 async function handlePathImport() {
-  const path = selectedFilePath;
-  if (!path) return;
+  const path = (document.getElementById('server-path-input').value || '').trim();
+  if (!path) { showImportError('Introduce la ruta del archivo en el servidor'); return; }
   hideImportError();
   const loadingEl = document.getElementById('import-loading');
   loadingEl.style.display = '';
@@ -1118,10 +1154,9 @@ async function handleFileSelected(input) {
   if (!file) return;
   const BIG = 500 * 1024 * 1024; // 500 MB
   if (file.size > BIG) {
-    document.getElementById('import-large-file').style.display = '';
-    document.getElementById('browse-selected').style.display = 'none';
-    selectedFilePath = '';
-    browseDir('');
+    // too big to upload — ask for server path
+    showImportSource('server');
+    showImportError('El archivo es demasiado grande para subirlo. Cópialo al servidor e indica la ruta.');
   } else {
     // small enough — upload directly
     hideImportError();

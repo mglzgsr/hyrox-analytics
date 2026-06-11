@@ -122,6 +122,11 @@ def browse(path: str = ""):
 class ParsePathIn(BaseModel):
     path: str
 
+@app.post("/api/import/upload-parsed")
+def upload_parsed(sessions: list):
+    existing_dates = {s["date"] for s in db.get_sessions()}
+    return [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
+
 @app.post("/api/import/parse-path")
 def parse_path(body: ParsePathIn):
     if not os.path.exists(body.path):
