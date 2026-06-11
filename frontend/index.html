@@ -255,6 +255,7 @@ input[type=text], textarea { background: var(--card); border: 1px solid var(--bo
         </div>
       </div>
       <div id="import-loading" style="display:none;color:var(--muted);margin-top:12px;font-size:14px;">Procesando...</div>
+      <div id="import-error" style="display:none;margin-top:12px;padding:12px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);border-radius:8px;font-size:13px;color:#fca5a5;"></div>
       <div style="margin-top:32px;padding-top:20px;border-top:1px solid var(--border);">
         <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Zona de peligro</div>
         <button class="btn btn-danger btn-sm" onclick="resetDatabase()">🗑 Borrar todos los datos</button>
@@ -1017,7 +1018,7 @@ async function resetDatabase() {
   showPage(state.currentPage);
 }
 
-function openImport() { document.getElementById('modal-import').classList.add('open'); showImportStep('upload'); }
+function openImport() { document.getElementById('modal-import').classList.add('open'); showImportStep('upload'); hideImportError(); }
 function closeImport() { document.getElementById('modal-import').classList.remove('open'); }
 function showImportStep(step) {
   document.getElementById('import-step-upload').style.display = step === 'upload' ? '' : 'none';
@@ -1057,20 +1058,59 @@ function selectFile(path, name) {
   document.getElementById('browse-selected-name').textContent = '📄 ' + name;
 }
 
+function showImportError(msg) {
+  document.getElementById('import-loading').style.display = 'none';
+  const el = document.getElementById('import-error');
+  el.style.display = '';
+  el.textContent = '⚠️ ' + msg;
+}
+function hideImportError() {
+  document.getElementById('import-error').style.display = 'none';
+}
+
+async function pollJob(job_id) {
+  const loadingEl = document.getElementById('import-loading');
+  let dots = 0;
+  const timer = setInterval(() => {
+    dots = (dots + 1) % 4;
+    loadingEl.textContent = 'Procesando' + '.'.repeat(dots + 1);
+  }, 600);
+  try {
+    while (true) {
+      await new Promise(r => setTimeout(r, 2000));
+      const r = await fetch(`/api/import/jobs/${job_id}`);
+      if (!r.ok) throw new Error(await r.text());
+      const job = await r.json();
+      if (job.status === 'done') return job.result;
+      if (job.status === 'error') throw new Error(job.error);
+    }
+  } finally {
+    clearInterval(timer);
+    loadingEl.style.display = 'none';
+  }
+}
+
 async function handlePathImport() {
   const path = selectedFilePath;
   if (!path) return;
-  document.getElementById('import-loading').style.display = '';
-  const res = await fetch('/api/import/parse-path', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  });
-  document.getElementById('import-loading').style.display = 'none';
-  if (!res.ok) { alert('Error: ' + await res.text()); return; }
-  pendingSessions = await res.json();
-  renderImportSessions(pendingSessions);
-  showImportStep('sessions');
+  hideImportError();
+  const loadingEl = document.getElementById('import-loading');
+  loadingEl.style.display = '';
+  loadingEl.textContent = 'Procesando...';
+  try {
+    const res = await fetch('/api/import/parse-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!res.ok) { showImportError(await res.text()); return; }
+    const { job_id } = await res.json();
+    pendingSessions = await pollJob(job_id);
+    renderImportSessions(pendingSessions);
+    showImportStep('sessions');
+  } catch(e) {
+    showImportError(e.message);
+  }
 }
 
 async function handleFileSelected(input) {
@@ -1084,15 +1124,23 @@ async function handleFileSelected(input) {
     browseDir('');
   } else {
     // small enough — upload directly
-    document.getElementById('import-loading').style.display = '';
-    const form = new FormData();
-    form.append('file', file);
-    const res = await fetch('/api/import/parse', { method: 'POST', body: form });
-    document.getElementById('import-loading').style.display = 'none';
-    if (!res.ok) { alert('Error procesando el archivo'); return; }
-    pendingSessions = await res.json();
-    renderImportSessions(pendingSessions);
-    showImportStep('sessions');
+    hideImportError();
+    const loadingEl = document.getElementById('import-loading');
+    loadingEl.style.display = '';
+    loadingEl.textContent = 'Subiendo archivo...';
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/import/parse', { method: 'POST', body: form });
+      if (!res.ok) { showImportError('Error procesando el archivo'); return; }
+      const { job_id } = await res.json();
+      loadingEl.textContent = 'Procesando...';
+      pendingSessions = await pollJob(job_id);
+      renderImportSessions(pendingSessions);
+      showImportStep('sessions');
+    } catch(e) {
+      showImportError(e.message);
+    }
   }
 }
 

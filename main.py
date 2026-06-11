@@ -1,4 +1,6 @@
 import os
+import uuid
+import threading
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,6 +8,18 @@ from pydantic import BaseModel
 from typing import List, Optional
 import database as db
 from parser import extract_hyrox_sessions
+
+# --- async job store ---
+_jobs: dict = {}  # job_id -> {status, result, error}
+
+def _run_parse_job(job_id: str, path: str):
+    try:
+        sessions = extract_hyrox_sessions(path)
+        existing_dates = {s["date"] for s in db.get_sessions()}
+        result = [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
+        _jobs[job_id] = {"status": "done", "result": result}
+    except Exception as e:
+        _jobs[job_id] = {"status": "error", "error": str(e)}
 
 app = FastAPI()
 db.init_db()
@@ -112,9 +126,18 @@ class ParsePathIn(BaseModel):
 def parse_path(body: ParsePathIn):
     if not os.path.exists(body.path):
         raise HTTPException(400, f"Archivo no encontrado: {body.path}")
-    sessions = extract_hyrox_sessions(body.path)
-    existing_dates = {s["date"] for s in db.get_sessions()}
-    return [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running"}
+    t = threading.Thread(target=_run_parse_job, args=(job_id, body.path), daemon=True)
+    t.start()
+    return {"job_id": job_id}
+
+@app.get("/api/import/jobs/{job_id}")
+def get_job(job_id: str):
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job no encontrado")
+    return job
 
 @app.post("/api/import/parse")
 async def parse_upload(file: UploadFile = File(...)):
@@ -123,12 +146,20 @@ async def parse_upload(file: UploadFile = File(...)):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
-    try:
-        sessions = extract_hyrox_sessions(tmp_path)
-    finally:
-        os.unlink(tmp_path)
-    existing_dates = {s["date"] for s in db.get_sessions()}
-    return [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running"}
+    def run():
+        try:
+            sessions = extract_hyrox_sessions(tmp_path)
+            existing_dates = {s["date"] for s in db.get_sessions()}
+            result = [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
+            _jobs[job_id] = {"status": "done", "result": result}
+        except Exception as e:
+            _jobs[job_id] = {"status": "error", "error": str(e)}
+        finally:
+            os.unlink(tmp_path)
+    threading.Thread(target=run, daemon=True).start()
+    return {"job_id": job_id}
 
 
 # --- admin ---
