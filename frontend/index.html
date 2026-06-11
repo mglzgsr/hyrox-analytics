@@ -1064,7 +1064,7 @@ function showImportSource(src) {
     document.getElementById('server-path-input').focus();
   }
   if (src === 'local-parse') {
-    const cmd = `cd ~/Projects/hyrox-analytics\npython3 - <<'EOF'\nimport json, sys\nsys.path.insert(0, '.')\nfrom parser import extract_hyrox_sessions\nsessions = extract_hyrox_sessions('/Users/miguelizaga/Downloads/apple_health_export/export.xml')\nwith open('/tmp/hyrox_sessions.json', 'w') as f:\n    json.dump(sessions, f)\nprint(f'Listo: {len(sessions)} sesiones → /tmp/hyrox_sessions.json')\nEOF`;
+    const cmd = `cd ~/Projects/hyrox-analytics\npython3 - <<'EOF'\nimport json, sys, os\nsys.path.insert(0, '.')\nfrom parser import extract_hyrox_sessions\n\nXML = "/ruta/al/export.xml"  # ← cambia esto\n\nout = os.path.join(os.path.dirname(os.path.abspath(XML)), 'hyrox_sessions.json')\nsessions = extract_hyrox_sessions(XML)\nwith open(out, 'w') as f:\n    json.dump(sessions, f)\nprint(f'Listo: {len(sessions)} sesiones → {out}')\nEOF`;
     document.getElementById('parse-cmd').textContent = cmd;
   }
 }
