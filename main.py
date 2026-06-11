@@ -1,7 +1,7 @@
 import os
 import uuid
 import threading
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -123,7 +123,8 @@ class ParsePathIn(BaseModel):
     path: str
 
 @app.post("/api/import/upload-parsed")
-def upload_parsed(sessions: list):
+async def upload_parsed(request: Request):
+    sessions = await request.json()
     existing_dates = {s["date"] for s in db.get_sessions()}
     return [{**s, "already_imported": s["date"] in existing_dates} for s in sessions]
 
