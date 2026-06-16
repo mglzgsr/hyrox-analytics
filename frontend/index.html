@@ -330,7 +330,7 @@ function fmtDate(d) {
 
 // --- nav ---
 async function showPage(page) {
-  const pages = ['dashboard','sessions','compare','stations'];
+  const pages = ['dashboard','sessions','stations','compare'];
   pages.forEach(p => {
     document.getElementById('page-' + p).style.display = p === page ? '' : 'none';
   });
@@ -453,10 +453,13 @@ async function renderComparator() {
   const allLabels = [...new Set([...labelsA, ...labelsB])];
   const mapA = Object.fromEntries(a.segments.filter(s => s.type==='station').map(s => [s.label, s.duration_s]));
   const mapB = Object.fromEntries(b.segments.filter(s => s.type==='station').map(s => [s.label, s.duration_s]));
-  const runA = a.segments.filter(s => s.type==='run').map(s => s.duration_s);
-  const runB = b.segments.filter(s => s.type==='run').map(s => s.duration_s);
-  const avgRunA = runA.length ? Math.round(runA.reduce((x,y)=>x+y,0)/runA.length) : null;
-  const avgRunB = runB.length ? Math.round(runB.reduce((x,y)=>x+y,0)/runB.length) : null;
+  const runSegsA = a.segments.filter(s => s.type==='run' && s.distance_m > 0);
+  const runSegsB = b.segments.filter(s => s.type==='run' && s.distance_m > 0);
+  const pace1k = segs => segs.length
+    ? Math.round(segs.reduce((acc,s) => acc + s.duration_s / s.distance_m, 0) / segs.length * 1000)
+    : null;
+  const avgRunA = pace1k(runSegsA);
+  const avgRunB = pace1k(runSegsB);
 
   function diffCell(tA, tB) {
     if (!tA || !tB) return '<td>—</td><td>—</td><td>—</td>';
@@ -479,7 +482,7 @@ async function renderComparator() {
         </tr></thead>
         <tbody>
           <tr>
-            <td style="color:var(--muted)">🏃 Carrera media</td>
+            <td style="color:var(--muted)">🏃 Carrera media (ritmo/km)</td>
             ${diffCell(avgRunA, avgRunB)}
           </tr>
           ${allLabels.map(label => `
