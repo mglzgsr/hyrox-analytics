@@ -147,22 +147,6 @@ input[type=text], textarea { background: var(--card); border: 1px solid var(--bo
         </div>
       </div>
 
-      <!-- Tiempo total + Estimado -->
-      <div class="section grid-2">
-        <div class="card">
-          <div class="card-title">Tiempo total por sesión</div>
-          <div class="chart-wrap"><canvas id="chart-total"></canvas></div>
-        </div>
-        <div class="card" id="dash-estimate-section" style="display:none">
-          <div class="card-title">Estimado carrera completa</div>
-          <div id="dash-estimate-content"></div>
-        </div>
-        <div class="card" id="dash-estimate-placeholder">
-          <div class="card-title">Estimado carrera completa</div>
-          <div class="empty" style="padding:24px 0;font-size:13px;">Importa más sesiones para calcular el estimado.</div>
-        </div>
-      </div>
-
       <!-- Tendencia estaciones -->
       <div class="section">
         <div class="card">
@@ -191,6 +175,22 @@ input[type=text], textarea { background: var(--card); border: 1px solid var(--bo
         <div class="card">
           <div class="card-title">Ranking estaciones (tiempo medio)</div>
           <div id="station-ranking"></div>
+        </div>
+      </div>
+
+      <!-- Tiempo total + Estimado -->
+      <div class="section grid-2">
+        <div class="card">
+          <div class="card-title">Tiempo total por sesión</div>
+          <div class="chart-wrap"><canvas id="chart-total"></canvas></div>
+        </div>
+        <div class="card" id="dash-estimate-section" style="display:none">
+          <div class="card-title">Estimado carrera completa</div>
+          <div id="dash-estimate-content"></div>
+        </div>
+        <div class="card" id="dash-estimate-placeholder">
+          <div class="card-title">Estimado carrera completa</div>
+          <div class="empty" style="padding:24px 0;font-size:13px;">Importa más sesiones para calcular el estimado.</div>
         </div>
       </div>
     </div>
