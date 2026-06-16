@@ -285,8 +285,10 @@ input[type=text], textarea { background: var(--card); border: 1px solid var(--bo
     <div id="import-step-sessions" style="display:none">
       <p style="color:var(--muted);font-size:13px;margin-bottom:16px;" id="import-summary"></p>
       <div id="import-sessions-list"></div>
-      <div class="flex gap8 mt20">
+      <div class="flex gap8 mt20" style="align-items:center;">
         <button class="btn btn-ghost" onclick="showImportStep('upload')">← Volver</button>
+        <button class="btn btn-ghost btn-sm" id="toggle-all-btn" onclick="toggleAllSessions()">Marcar todas</button>
+        <span id="import-counter" style="font-size:13px;color:var(--muted);"></span>
         <button class="btn btn-primary ml-auto" onclick="saveAllSessions()">Guardar sesiones</button>
       </div>
     </div>
@@ -1185,6 +1187,20 @@ function isSunday(dateStr) {
   return new Date(y, m - 1, d).getDay() === 0;
 }
 
+function updateImportCounter() {
+  const boxes = document.querySelectorAll('#import-sessions-list input[type=checkbox]:not(:disabled)');
+  const checked = [...boxes].filter(b => b.checked).length;
+  document.getElementById('import-counter').textContent = checked > 0 ? `${checked} seleccionada${checked !== 1 ? 's' : ''}` : '';
+  document.getElementById('toggle-all-btn').textContent = checked === boxes.length ? 'Desmarcar todas' : 'Marcar todas';
+}
+
+function toggleAllSessions() {
+  const boxes = document.querySelectorAll('#import-sessions-list input[type=checkbox]:not(:disabled)');
+  const allChecked = [...boxes].every(b => b.checked);
+  boxes.forEach(b => b.checked = !allChecked);
+  updateImportCounter();
+}
+
 function renderImportSessions(sessions) {
   const newOnes = sessions.filter(s => !s.already_imported);
   const autoSelected = newOnes.filter(s => isSunday(s.date)).length;
@@ -1198,7 +1214,7 @@ function renderImportSessions(sessions) {
     return `
       <div class="session-candidate ${imported ? 'imported' : ''}" id="candidate-${si}">
         <div class="session-header">
-          <input type="checkbox" id="chk-${si}" ${imported ? 'disabled' : ''} ${preChecked ? 'checked' : ''}>
+          <input type="checkbox" id="chk-${si}" ${imported ? 'disabled' : ''} ${preChecked ? 'checked' : ''} onchange="updateImportCounter()">
           <div class="session-date">${fmtDate(s.date)}</div>
           ${sunday && !imported ? '<span class="badge" style="background:rgba(249,115,22,.15);color:var(--accent)">domingo</span>' : ''}
           <div class="session-dur">${fmt(s.duration_s)} · ${s.splits.length} splits</div>
@@ -1248,6 +1264,7 @@ function renderImportSessions(sessions) {
       document.getElementById(`first-station-${si}`).onchange = () => initSplitAssignment(si);
     }
   });
+  updateImportCounter();
 }
 
 function initSplitAssignment(si) {
