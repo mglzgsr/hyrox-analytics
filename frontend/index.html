@@ -324,6 +324,10 @@ function fmt(s) {
   const m = Math.floor(s / 60), sec = s % 60;
   return `${m}:${String(sec).padStart(2,'0')}`;
 }
+function fmtLong(s) {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}` : fmt(s);
+}
 function fmtDate(d) {
   return new Date(d).toLocaleDateString('es-ES', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
 }
@@ -664,12 +668,12 @@ async function renderRaceEstimate() {
     <div class="grid-2" style="gap:16px;margin-bottom:20px;">
       <div style="padding:12px 16px;background:var(--bg);border-radius:10px;text-align:center;">
         <div style="font-size:11px;color:var(--muted);margin-bottom:4px;">TIEMPOS MEDIOS</div>
-        <div style="font-size:32px;font-weight:800;color:var(--accent)">${fmt(data.total_avg_s)}</div>
+        <div style="font-size:32px;font-weight:800;color:var(--accent)">${fmtLong(data.total_avg_s)}</div>
         ${missing.length ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;">sin datos: ${missing.join(', ')}</div>` : ''}
       </div>
       <div style="padding:12px 16px;background:var(--bg);border-radius:10px;text-align:center;">
         <div style="font-size:11px;color:var(--good);margin-bottom:4px;">MEJORES TIEMPOS</div>
-        <div style="font-size:32px;font-weight:800;color:var(--good)">${fmt(data.total_best_s)}</div>
+        <div style="font-size:32px;font-weight:800;color:var(--good)">${fmtLong(data.total_best_s)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px;">si replicas tus mejores marcas</div>
       </div>
     </div>
