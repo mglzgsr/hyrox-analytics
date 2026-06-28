@@ -56,6 +56,7 @@ class SegmentIn(BaseModel):
 
 class SessionIn(BaseModel):
     date: str
+    started_at: Optional[str] = None
     duration_s: int
     session_type: str = 'training'
     notes: Optional[str] = None
@@ -71,6 +72,7 @@ def create_session(body: SessionIn):
             segments=[s.model_dump() for s in body.segments],
             notes=body.notes,
             session_type=body.session_type,
+            started_at=body.started_at,
         )
         return {"id": session_id}
     except Exception as e:
@@ -96,6 +98,21 @@ def update_session(session_id: int, body: SessionIn):
 def delete_session(session_id: int):
     db.delete_session(session_id)
     return {"ok": True}
+
+
+class MergeIn(BaseModel):
+    session_id_a: int
+    session_id_b: int
+
+
+@app.post("/api/sessions/merge")
+def merge_sessions(body: MergeIn):
+    try:
+        merged_id = db.merge_sessions(body.session_id_a, body.session_id_b)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    session = db.get_session(merged_id)
+    return session
 
 
 # --- import ---

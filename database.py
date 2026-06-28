@@ -30,6 +30,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sessions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             date        TEXT NOT NULL UNIQUE,
+            started_at  TEXT,
             duration_s  INTEGER NOT NULL,
             session_type TEXT NOT NULL DEFAULT 'training' CHECK(session_type IN ('full', 'training')),
             notes       TEXT,
@@ -47,12 +48,16 @@ def init_db():
             UNIQUE(session_id, position)
         );
     """)
-    # migration: add session_type if missing
-    try:
-        conn.execute("ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'training' CHECK(session_type IN ('full', 'training'))")
-        conn.commit()
-    except Exception:
-        pass
+    # migrations
+    for stmt in [
+        "ALTER TABLE sessions ADD COLUMN session_type TEXT NOT NULL DEFAULT 'training' CHECK(session_type IN ('full', 'training'))",
+        "ALTER TABLE sessions ADD COLUMN started_at TEXT",
+    ]:
+        try:
+            conn.execute(stmt)
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
 
 
@@ -97,12 +102,12 @@ def update_session(session_id, duration_s, segments, notes=None, session_type='t
     conn.close()
 
 
-def save_session(date, duration_s, segments, notes=None, session_type='training'):
+def save_session(date, duration_s, segments, notes=None, session_type='training', started_at=None):
     conn = get_db()
     try:
         cur = conn.execute(
-            "INSERT INTO sessions (date, duration_s, notes, session_type) VALUES (?, ?, ?, ?)",
-            (date, duration_s, notes, session_type),
+            "INSERT INTO sessions (date, started_at, duration_s, notes, session_type) VALUES (?, ?, ?, ?, ?)",
+            (date, started_at, duration_s, notes, session_type),
         )
         session_id = cur.lastrowid
         conn.executemany(
@@ -123,6 +128,55 @@ def delete_session(session_id):
     conn.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
     conn.commit()
     conn.close()
+
+
+def merge_sessions(session_id_a, session_id_b):
+    """Fusiona dos sesiones. La más antigua (por date, luego id) absorbe a la otra."""
+    conn = get_db()
+    try:
+        a = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id_a,)).fetchone()
+        b = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id_b,)).fetchone()
+        if not a or not b:
+            raise ValueError("Sesión no encontrada")
+
+        # Determinar orden: usar started_at si ambas lo tienen, sino date, luego id
+        def sort_key(s):
+            return (s["started_at"] or s["date"], s["id"])
+
+        if sort_key(a) <= sort_key(b):
+            first, second = dict(a), dict(b)
+        else:
+            first, second = dict(b), dict(a)
+
+        segs_first = conn.execute(
+            "SELECT * FROM segments WHERE session_id = ? ORDER BY position", (first["id"],)
+        ).fetchall()
+        segs_second = conn.execute(
+            "SELECT * FROM segments WHERE session_id = ? ORDER BY position", (second["id"],)
+        ).fetchall()
+
+        merged_segs = [dict(s) for s in segs_first] + [dict(s) for s in segs_second]
+        for i, s in enumerate(merged_segs, start=1):
+            s["position"] = i
+
+        total_duration = sum(s["duration_s"] for s in merged_segs)
+        # Si alguna es 'full', la sesión fusionada es 'full'
+        merged_type = "full" if first["session_type"] == "full" or second["session_type"] == "full" else "training"
+
+        conn.execute(
+            "UPDATE sessions SET duration_s = ?, session_type = ? WHERE id = ?",
+            (total_duration, merged_type, first["id"]),
+        )
+        conn.execute("DELETE FROM segments WHERE session_id = ?", (first["id"],))
+        conn.executemany(
+            "INSERT INTO segments (session_id, position, type, label, duration_s, distance_m) VALUES (?,?,?,?,?,?)",
+            [(first["id"], s["position"], s["type"], s["label"], s["duration_s"], s.get("distance_m")) for s in merged_segs],
+        )
+        conn.execute("DELETE FROM sessions WHERE id = ?", (second["id"],))
+        conn.commit()
+        return first["id"]
+    finally:
+        conn.close()
 
 
 def get_station_stats():

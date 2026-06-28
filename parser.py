@@ -70,6 +70,7 @@ def extract_hyrox_sessions(source):
 
         sessions.append({
             "date": date_str,
+            "started_at": elem.attrib["startDate"][:19],
             "duration_s": total_s,
             "splits": splits,
         })

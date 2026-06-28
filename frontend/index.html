@@ -753,18 +753,31 @@ async function renderStationChart() {
 }
 
 // --- sessions page ---
+let selectedForMerge = new Set();
+
 function renderSessions() {
   const s = state.sessions;
   const el = document.getElementById('sessions-list');
   if (!s.length) { el.innerHTML = '<div class="empty">Sin sesiones. Importa tu export de Apple Health.</div>'; return; }
+
+  const mergeBtn = `<button id="merge-btn" class="btn btn-sm" style="display:none;background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3)" onclick="confirmMergeSessions()">Fusionar seleccionadas</button>`;
+
   el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;min-height:32px;">
+      <span style="font-size:12px;color:var(--muted)" id="merge-hint">Selecciona 2 sesiones para fusionarlas</span>
+      ${mergeBtn}
+    </div>
     <div class="card">
       <table>
         <thead><tr>
+          <th style="width:32px"></th>
           <th>Fecha</th><th>Duración</th><th>Segmentos</th><th></th>
         </tr></thead>
         <tbody>${s.map(ss => `
-          <tr style="cursor:pointer" onclick="openSessionDetail(${ss.id})">
+          <tr style="cursor:pointer" onclick="openSessionDetail(${ss.id})" id="session-row-${ss.id}">
+            <td onclick="event.stopPropagation()" style="padding:8px 4px">
+              <input type="checkbox" id="merge-cb-${ss.id}" onchange="toggleMergeSelect(${ss.id})" style="cursor:pointer;accent-color:#f97316">
+            </td>
             <td>${fmtDate(ss.date)}</td>
             <td style="font-variant-numeric:tabular-nums">${fmt(ss.duration_s)}</td>
             <td>${ss.segment_count}</td>
@@ -773,6 +786,55 @@ function renderSessions() {
         </tbody>
       </table>
     </div>`;
+
+  selectedForMerge.clear();
+}
+
+function toggleMergeSelect(id) {
+  if (selectedForMerge.has(id)) {
+    selectedForMerge.delete(id);
+    document.getElementById(`session-row-${id}`).style.background = '';
+  } else {
+    if (selectedForMerge.size >= 2) {
+      document.getElementById(`merge-cb-${id}`).checked = false;
+      return;
+    }
+    selectedForMerge.add(id);
+    document.getElementById(`session-row-${id}`).style.background = 'rgba(251,191,36,.07)';
+  }
+  const btn = document.getElementById('merge-btn');
+  const hint = document.getElementById('merge-hint');
+  if (selectedForMerge.size === 2) {
+    btn.style.display = '';
+    hint.style.display = 'none';
+  } else {
+    btn.style.display = 'none';
+    hint.style.display = '';
+  }
+}
+
+async function confirmMergeSessions() {
+  const [idA, idB] = [...selectedForMerge];
+  const sA = state.sessions.find(s => s.id === idA);
+  const sB = state.sessions.find(s => s.id === idB);
+  if (!confirm(`¿Fusionar sesiones?\n\n• ${fmtDate(sA.date)} (${fmt(sA.duration_s)}, ${sA.segment_count} segmentos)\n• ${fmtDate(sB.date)} (${fmt(sB.duration_s)}, ${sB.segment_count} segmentos)\n\nLos segmentos se ordenarán por fecha. La sesión más antigua absorbe a la otra.`)) return;
+  const btn = document.getElementById('merge-btn');
+  btn.disabled = true;
+  btn.textContent = 'Fusionando…';
+  const res = await fetch('/api/sessions/merge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id_a: idA, session_id_b: idB }),
+  });
+  if (!res.ok) {
+    alert('Error al fusionar: ' + (await res.text()));
+    btn.disabled = false;
+    btn.textContent = 'Fusionar seleccionadas';
+    return;
+  }
+  selectedForMerge.clear();
+  await loadData();
+  renderSessions();
 }
 
 // --- session detail ---
@@ -1360,7 +1422,7 @@ async function saveAllSessions() {
     await fetch('/api/sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: s.date, duration_s: s.duration_s, session_type, segments }),
+      body: JSON.stringify({ date: s.date, started_at: s.started_at || null, duration_s: s.duration_s, session_type, segments }),
     });
   }
 
